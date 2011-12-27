@@ -1,0 +1,147 @@
+<project name="Talent Gurus Wordpress Build Script" basedir="." default="deploy.local">
+	<!-- Load properties -->
+	<property file="build.properties"/>
+
+	<!-- Load task definitions e.g. FTP -->
+	<!--
+  <path id="class.path">
+		<fileset dir="" includes="*.jar"/>
+	</path>
+	<taskdef file="task.properties" classpathref="class.path"/>
+  -->
+
+	<!-- Set variables for build directories -->
+  <condition property="deploy.dir.local" value="c:\wamp\www\${project.name}">
+    <os family="windows" />
+  </condition>
+  <condition property="deploy.dir.local" value="/Users/me/Sites/${project.name}">
+    <os family="mac" />
+  </condition>
+  <fail unless="deploy.dir.local">Couldn't find a deployment directory!</fail>
+
+
+  <condition property="path.mysql" value="c:\wamp\bin\mysql\mysql5.1.36\bin\">
+    <os family="windows" />
+  </condition>
+  <condition property="path.mysql" value="/usr/bin/">
+    <os family="mac" />
+  </condition>
+  <fail unless="path.mysql">Couldn't configure MySQL path!</fail>
+
+
+  <target name="init.database" depends="scripts.prep">
+  	<echo>Initializing database from db/database.sql...</echo>
+    <exec executable="${path.mysql}mysql" input="db/tmp/001_init_database.sql">
+      <arg value="-uroot"/>
+    </exec>
+     <exec executable="${path.mysql}mysql" input="db/tmp/database.sql">
+      <arg value="-uroot"/>
+      <arg value="wordpress_${project.name}"/>
+    </exec>
+    
+    <antcall target="scripts.clean" />
+  </target>
+
+  <target name="reload.database" depends="scripts.prep">
+  	<echo>Reloading database from db/database.sql...</echo>
+    <exec executable="${path.mysql}mysql" input="db/tmp/002_reload_database.sql">
+      <arg value="-uroot"/>
+    </exec>
+     <exec executable="${path.mysql}mysql" input="db/tmp/database.sql">
+      <arg value="-uroot"/>
+      <arg value="wordpress_${project.name}"/>
+    </exec>
+    
+    <antcall target="scripts.clean" />
+  </target>
+
+  <target name="dump.database" depends="scripts.prep">
+  	<echo>Dumping database to db/database.sql...</echo>
+    <exec executable="${path.mysql}mysqldump" output="db/database.sql">
+      <arg value="-uroot"/>
+      <arg value="wordpress_${project.name}"/>
+    </exec>
+    
+    <antcall target="scripts.clean" />
+  </target>
+
+  <target name="pull.htaccess" depends="" description="Build project">
+      <echo>Copying .htaccess from WAMP folder...</echo>
+      <copy file="${deploy.dir.local}\.htaccess" tofile="${src.dir}\.htaccess" />
+  </target>
+
+  <target name="pull.plugins" depends="dump.database" description="Build project">
+    <echo>Copying plugins from WAMP folder...</echo>
+    <copy todir="${src.dir}\wp-content\plugins">
+      <fileset dir="${deploy.dir.local}\wp-content\plugins"/>
+    </copy>
+  </target>
+
+  <target name="pull.uploads" depends="dump.database" description="Build project">
+      <echo>Copying uploads from WAMP folder...</echo>
+      <copy todir="${src.dir}\wp-content\uploads">
+        <fileset dir="${deploy.dir.local}\wp-content\uploads"/>
+      </copy>
+  </target>
+
+	<target name="-init" depends="clean">
+		<echo>Creating temporary folders...</echo>
+		<mkdir dir="${deploy.dir.local}"/>
+	</target>
+
+	<target name="clean" description="Clean up">
+		<echo>Cleaning up...</echo>
+		<delete dir="${deploy.dir.local}"/>
+	</target>
+
+	<target name="build" depends="" description="Build project">
+		<echo>Copying files to build folder...</echo>
+		<copy todir="${deploy.dir.local}">
+			<fileset dir="${src.dir}"/>
+		</copy>
+	</target>
+
+	<target name="deploy.local" depends="" description="Deploy to local webserver">
+		<echo>Copying files to local webserver...</echo>
+		<copy todir="${deploy.dir.local}">
+			<fileset dir="${src.dir}"/>
+		</copy>
+	</target>
+
+	<target name="deploy.dev" depends="build" description="Release to remote dev webserver">
+
+ 		<ftp server="${deploy.dev.ftp.host}"
+			remotedir="${deploy.dev.ftp.basedir}"
+			userid="${deploy.dev.ftp.username}"
+			password="${deploy.dev.ftp.password}">
+			<fileset dir="${deploy.dir.local}"/>
+		</ftp>
+
+		<!-- Clean up -->
+		<antcall target="clean"/>
+	</target>
+
+	<target name="scripts.prep" depends="" description="Prepare database scripts">
+	   <delete dir="db/tmp" />
+	   <mkdir dir="db/tmp" />
+
+	   <copy todir="db/tmp">
+	       <fileset dir="db">
+	           <include name="*.sql" />
+	       </fileset>
+	   </copy>
+
+	   <replace dir="db/tmp" propertyFile="build.properties">
+	       <replacefilter token="@DATABASE@" value="${db.prefix}${project.name}" />
+	       <replacefilter token="@DATABASE_USERNAME@" value="${db.username}" />
+	       <replacefilter token="@DATABASE_PASSWORD@" value="${db.password}" />
+	       <replacefilter token="@HOST_LOCAL@" value="${host.local}" />
+	       <replacefilter token="@HOST_STAGING@" value="${host.staging}" />
+	       <replacefilter token="http://localhost/wordpress" value="${host.local}/${project.name}" />
+	   </replace>
+	</target>
+
+	<target name="scripts.clean" depends="" description="Clean database scripts">
+	   <delete dir="db/tmp" />
+	</target>
+</project>
